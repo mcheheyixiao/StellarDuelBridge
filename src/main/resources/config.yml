@@ -1,0 +1,151 @@
+settings:
+  display-name: "荣誉决斗"
+  invite-expire-seconds: 60
+  request-cooldown-seconds: 15
+  countdown-seconds: 5
+  max-duration-seconds: 300
+  return-mode: ORIGINAL_LOCATION
+  allow-cross-world-request: true
+  require-same-world-request: false
+  prevent-duel-in-disabled-worlds: true
+  prevent-duel-while-in-combat: true
+  prevent-duel-while-flying: true
+  prevent-duel-while-vanished: true
+  prevent-self-duel: true
+  prevent-same-ip-duel: false
+
+integration:
+  pvpmanager:
+    enabled: true
+    mode: PASSIVE
+  multiverse:
+    enabled: true
+    require-world-loaded: true
+  worldguard:
+    enabled: false
+    check-arena-region: false
+  vault:
+    enabled: false
+  placeholderapi:
+    enabled: true
+
+storage:
+  type: SQLITE
+  sqlite:
+    file: "duel-stats.db"
+  mysql:
+    enabled: false
+    fallback-to-sqlite-if-unavailable: true
+    host: "127.0.0.1"
+    port: 3306
+    database: "stellar_duel"
+    username: "root"
+    password: ""
+    pool-size: 5
+    use-ssl: false
+
+worlds:
+  disabled-request-worlds:
+    - spawn
+    - dungeon
+  arena-world-prefixes:
+    - duel_arena_
+
+modes:
+  default: REAL_GEAR
+  allow-player-selection: true
+
+  real-gear:
+    enabled: true
+    display-name: "真实装备模式"
+    restore-inventory-after-match: true
+    restore-durability: true
+    restore-consumables: true
+    clear-potion-effects-on-start: true
+    restore-potion-effects-after-match: false
+
+  fair-kit:
+    enabled: true
+    display-name: "公平 Kit 模式"
+    default-kit: "knight_basic"
+    clear-potion-effects-on-start: true
+    restore-potion-effects-after-match: false
+    kits:
+      knight_basic:
+        display-name: "&6骑士试炼"
+        items:
+          - slot: 0
+            material: IRON_SWORD
+            amount: 1
+            name: "&f试炼铁剑"
+            lore:
+              - "&7荣誉决斗标准武器"
+          - slot: 1
+            material: SHIELD
+            amount: 1
+          - slot: 8
+            material: COOKED_BEEF
+            amount: 8
+        armor:
+          helmet:
+            material: IRON_HELMET
+            amount: 1
+          chestplate:
+            material: IRON_CHESTPLATE
+            amount: 1
+          leggings:
+            material: IRON_LEGGINGS
+            amount: 1
+          boots:
+            material: IRON_BOOTS
+            amount: 1
+
+  empty-ritual:
+    enabled: true
+    display-name: "空手仪式模式"
+    give-basic-weapon: true
+    weapon:
+      material: WOODEN_SWORD
+      amount: 1
+      name: "&f仪式木剑"
+      lore:
+        - "&7一场简朴而纯粹的荣誉决斗"
+
+combat:
+  keep-inventory: true
+  clear-drops: true
+  clear-exp-drops: true
+  freeze-during-countdown: true
+  invulnerable-after-teleport-ticks: 60
+  allow-durability-loss: false
+  allow-consumables: true
+  allow-bow: true
+  allow-crossbow: true
+  allow-trident: false
+  allow-ender-pearl: false
+  allow-chorus-fruit: false
+  blocked-commands:
+    - spawn
+    - home
+    - tpa
+    - tpaccept
+    - warp
+    - back
+    - fly
+    - gm
+    - gamemode
+    - ec
+    - enderchest
+    - trade
+    - ah
+    - auction
+    - shop
+
+rewards:
+  enabled: false
+  winner-commands: []
+  loser-commands: []
+  draw-commands: []
+
+debug:
+  enabled: false

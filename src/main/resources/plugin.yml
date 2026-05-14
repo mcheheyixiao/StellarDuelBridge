@@ -1,0 +1,104 @@
+name: StellarDuelBridge
+version: '${version}'
+main: org.stellarvan.stellarDuelBridge.StellarDuelBridge
+api-version: '1.21'
+authors:
+  - StellarVan
+description: 生存服内的仪式化私人决斗系统，为繁星World提供“荣誉决斗”玩法。
+website: https://www.stellarvan.cn
+
+softdepend:
+  - PvPManager
+  - Multiverse-Core
+  - WorldGuard
+  - Vault
+  - PlaceholderAPI
+
+commands:
+  duel:
+    description: 荣誉决斗玩家命令
+    usage: /duel <玩家|accept|deny|cancel|leave|stats|help>
+    aliases:
+      - rongyuduel
+      - hd
+    permission: stellarduelbridge.command.duel
+
+  dueladmin:
+    description: 荣誉决斗管理员命令
+    usage: /dueladmin <create|delete|setspawn|setspectator|setreturn|enable|disable|list|reload>
+    aliases:
+      - dueladm
+      - hda
+    permission: stellarduelbridge.command.admin
+
+permissions:
+  stellarduelbridge.*:
+    description: 荣誉决斗全部权限
+    default: op
+    children:
+      stellarduelbridge.command.*: true
+      stellarduelbridge.admin.*: true
+      stellarduelbridge.bypass.*: true
+
+  stellarduelbridge.command.*:
+    description: 荣誉决斗全部命令权限
+    default: op
+    children:
+      stellarduelbridge.command.duel: true
+      stellarduelbridge.command.admin: true
+
+  stellarduelbridge.command.duel:
+    description: 允许使用 /duel 基础命令
+    default: true
+
+  stellarduelbridge.command.admin:
+    description: 允许使用 /dueladmin 管理命令
+    default: op
+
+  stellarduelbridge.admin.*:
+    description: 荣誉决斗管理权限
+    default: op
+    children:
+      stellarduelbridge.admin.create: true
+      stellarduelbridge.admin.delete: true
+      stellarduelbridge.admin.setspawn: true
+      stellarduelbridge.admin.setspectator: true
+      stellarduelbridge.admin.setreturn: true
+      stellarduelbridge.admin.enable: true
+      stellarduelbridge.admin.disable: true
+      stellarduelbridge.admin.list: true
+      stellarduelbridge.admin.reload: true
+
+  stellarduelbridge.admin.create:
+    default: op
+  stellarduelbridge.admin.delete:
+    default: op
+  stellarduelbridge.admin.setspawn:
+    default: op
+  stellarduelbridge.admin.setspectator:
+    default: op
+  stellarduelbridge.admin.setreturn:
+    default: op
+  stellarduelbridge.admin.enable:
+    default: op
+  stellarduelbridge.admin.disable:
+    default: op
+  stellarduelbridge.admin.list:
+    default: op
+  stellarduelbridge.admin.reload:
+    default: op
+
+  stellarduelbridge.bypass.*:
+    description: 荣誉决斗绕过类权限
+    default: op
+    children:
+      stellarduelbridge.bypass.cooldown: true
+      stellarduelbridge.bypass.disabled-world: true
+      stellarduelbridge.bypass.command-block: true
+
+  stellarduelbridge.bypass.cooldown:
+    default: op
+  stellarduelbridge.bypass.disabled-world:
+    default: op
+  stellarduelbridge.bypass.command-block:
+    default: op

@@ -1,0 +1,28 @@
+arenas:
+  cooldown-after-match-seconds: 15
+  selection-mode: RANDOM_AVAILABLE
+  avoid-repeat: true
+
+  list:
+    duel_forest_01:
+      enabled: false
+      world: duel_arena_01
+      region: duel_forest_01
+      spawn-1:
+        x: 10.5
+        y: 80.0
+        z: 0.5
+        yaw: 90.0
+        pitch: 0.0
+      spawn-2:
+        x: -10.5
+        y: 80.0
+        z: 0.5
+        yaw: -90.0
+        pitch: 0.0
+      spectator:
+        x: 0.5
+        y: 90.0
+        z: 0.5
+        yaw: 0.0
+        pitch: 0.0

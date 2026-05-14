@@ -1,0 +1,71 @@
+duel-confirm:
+  title: "<dark_gray>荣誉决斗 · 契约确认"
+  size: 27
+  fill-empty-slots: true
+
+  filler:
+    material: BLACK_STAINED_GLASS_PANE
+    name: " "
+    custom-model-data: 0
+
+  buttons:
+    real-gear:
+      slot: 10
+      material: IRON_SWORD
+      name: "<gold>真实装备模式"
+      lore:
+        - "<gray>携带当前装备与背包进入决斗。"
+        - "<gray>死亡不掉落，结束后恢复状态。"
+        - ""
+        - "<yellow>适合：荣誉决斗、装备检验"
+      custom-model-data: 0
+
+    fair-kit:
+      slot: 13
+      material: SHIELD
+      name: "<aqua>公平 Kit 模式"
+      lore:
+        - "<gray>暂存原背包，并发放统一装备。"
+        - "<gray>结束后恢复原背包。"
+        - ""
+        - "<yellow>适合：公平竞技、技术切磋"
+      custom-model-data: 0
+
+    empty-ritual:
+      slot: 16
+      material: WOODEN_SWORD
+      name: "<white>空手仪式模式"
+      lore:
+        - "<gray>暂存原背包，以空手或木剑决斗。"
+        - "<gray>结束后恢复原背包。"
+        - ""
+        - "<yellow>适合：娱乐、活动、仪式感"
+      custom-model-data: 0
+
+    deny:
+      slot: 20
+      material: RED_DYE
+      name: "<red>拒绝决斗"
+      lore:
+        - "<gray>拒绝本次荣誉决斗邀请。"
+
+    confirm:
+      slot: 22
+      material: LIME_DYE
+      name: "<green>确认决斗"
+      lore:
+        - "<gray>确认当前选择并进入竞技场。"
+
+    info:
+      slot: 24
+      material: BOOK
+      name: "<yellow>决斗规则"
+      lore:
+        - "<gray>只有双方在竞技场内可以互相伤害。"
+        - "<gray>退出、认输、死亡都会结束决斗。"
+        - "<gray>普通世界不会被此系统影响。"
+
+itemsadder:
+  enabled: false
+  title-texture-key: ""
+  use-custom-model-data: true
