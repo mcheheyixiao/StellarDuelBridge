@@ -28,6 +28,8 @@ import org.stellarvan.stellarDuelBridge.StellarDuelBridge;
 import org.stellarvan.stellarDuelBridge.duel.DuelMode;
 import org.stellarvan.stellarDuelBridge.util.LocationSerializer;
 
+import javax.annotation.Nullable;
+
 public final class PendingRestoreManager {
 
     private final StellarDuelBridge plugin;
@@ -268,7 +270,8 @@ public final class PendingRestoreManager {
     private List<String> serializeItems(ItemStack[] items) {
         List<String> data = new ArrayList<>(items.length);
         for (ItemStack item : items) {
-            data.add(item == null ? "null" : encodeItem(item));
+            String encoded = encodeItem(item);
+            data.add(encoded == null ? "null" : encoded);
         }
         return data;
     }
@@ -281,8 +284,18 @@ public final class PendingRestoreManager {
         return items;
     }
 
-    private String encodeItem(ItemStack item) {
-        return Base64.getEncoder().encodeToString(item.serializeAsBytes());
+    private @Nullable String encodeItem(@Nullable ItemStack item) {
+        if (item == null || item.getType().isAir() || item.getAmount() <= 0) {
+            return null;
+        }
+
+        try {
+            return Base64.getEncoder()
+                .encodeToString(item.serializeAsBytes());
+        } catch (IllegalArgumentException exception) {
+            // Invalid/empty server item representations should not block duel startup.
+            return null;
+        }
     }
 
     private ItemStack decodeItem(String encoded) {
