@@ -20,9 +20,8 @@ public final class PlayerJoinRestoreListener implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        if (!snapshotService.hasDeferredRestore(event.getPlayer().getUniqueId())) {
-            return;
+        if (snapshotService.needsDeferredRestore(event.getPlayer().getUniqueId())) {
+            Bukkit.getScheduler().runTaskLater(duelSessionManager.getPlugin(), () -> duelSessionManager.applyDeferredRestore(event.getPlayer()), 1L);
         }
-        Bukkit.getScheduler().runTaskLater(duelSessionManager.getPlugin(), () -> duelSessionManager.applyDeferredRestore(event.getPlayer()), 1L);
     }
 }

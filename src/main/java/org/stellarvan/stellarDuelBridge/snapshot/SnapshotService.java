@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -38,10 +40,16 @@ public final class SnapshotService {
     }
 
     public void restore(Player player, PlayerSnapshot snapshot, DuelSettings settings, DuelMode mode) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(settings, "settings");
+        Objects.requireNonNull(mode, "mode");
         boolean restoreInventory = mode != DuelMode.REAL_GEAR || settings.realGearSettings().restoreInventoryAfterMatch();
         boolean restorePotions = mode == DuelMode.FAIR_KIT
             ? settings.fairKitSettings().restorePotionEffectsAfterMatch()
             : mode == DuelMode.EMPTY_RITUAL || settings.realGearSettings().restorePotionEffectsAfterMatch();
+        AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.MAX_HEALTH);
+        double maxHealth = maxHealthAttribute != null ? maxHealthAttribute.getValue() : 20.0D;
 
         player.closeInventory();
         player.getInventory().clear();
@@ -56,7 +64,7 @@ public final class SnapshotService {
         player.setGameMode(snapshot.getGameMode());
         player.setAllowFlight(snapshot.isAllowFlight());
         player.setFlying(snapshot.isAllowFlight() && snapshot.isFlying());
-        player.setHealth(Math.min(snapshot.getHealth(), player.getMaxHealth()));
+        player.setHealth(Math.min(snapshot.getHealth(), maxHealth));
         player.setFoodLevel(snapshot.getFoodLevel());
         player.setSaturation(snapshot.getSaturation());
         player.setLevel(snapshot.getLevel());
@@ -69,7 +77,7 @@ public final class SnapshotService {
         }
         if (restorePotions) {
             for (PotionEffect effect : snapshot.getPotionEffects()) {
-                player.addPotionEffect(effect, true);
+                player.addPotionEffect(effect);
             }
         }
         player.updateInventory();
@@ -104,6 +112,10 @@ public final class SnapshotService {
 
     public boolean hasDeferredRestore(UUID playerId) {
         return deferredRestores.containsKey(playerId);
+    }
+
+    public boolean needsDeferredRestore(UUID playerId) {
+        return hasDeferredRestore(playerId);
     }
 
     public List<UUID> getPendingRestorePlayers() {

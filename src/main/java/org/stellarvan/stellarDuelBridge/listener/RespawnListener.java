@@ -1,5 +1,6 @@
 package org.stellarvan.stellarDuelBridge.listener;
 
+import java.util.Objects;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,17 +15,16 @@ public final class RespawnListener implements Listener {
     private final DuelSessionManager duelSessionManager;
 
     public RespawnListener(SnapshotService snapshotService, DuelSessionManager duelSessionManager) {
-        this.snapshotService = snapshotService;
-        this.duelSessionManager = duelSessionManager;
+        this.snapshotService = Objects.requireNonNull(snapshotService, "snapshotService");
+        this.duelSessionManager = Objects.requireNonNull(duelSessionManager, "duelSessionManager");
     }
 
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
-        if (!snapshotService.hasDeferredRestore(event.getPlayer().getUniqueId())) {
-            return;
+        if (snapshotService.needsDeferredRestore(event.getPlayer().getUniqueId())) {
+            Player player = event.getPlayer();
+            Bukkit.getScheduler().runTaskLater(duelSessionManager.getPlugin(), () -> duelSessionManager.applyDeferredRestore(player), 1L);
         }
-        Player player = event.getPlayer();
-        Bukkit.getScheduler().runTaskLater(duelSessionManager.getPlugin(), () -> duelSessionManager.applyDeferredRestore(player), 1L);
     }
 
 }

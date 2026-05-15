@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
@@ -83,8 +84,8 @@ public final class PendingRestoreManager {
     }
 
     public CompletableFuture<Void> upsert(UUID playerId, PlayerSnapshot snapshot, Location returnLocation, DuelMode mode) {
+        String payload = serializePayload(snapshot, returnLocation, mode);
         return CompletableFuture.runAsync(() -> {
-            String payload = serializePayload(snapshot, returnLocation, mode);
             long now = System.currentTimeMillis() / 1000L;
             try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO pending_restores(player_uuid, payload, updated_at)
@@ -114,6 +115,8 @@ public final class PendingRestoreManager {
         }, executor);
     }
 
+    @SuppressWarnings("unused")
+    // reserved for deferred restore lifecycle
     public CompletableFuture<PendingRestoreRecord> load(UUID playerId) {
         return CompletableFuture.supplyAsync(() -> {
             try (PreparedStatement statement = connection.prepareStatement("SELECT payload FROM pending_restores WHERE player_uuid = ?")) {
@@ -207,7 +210,7 @@ public final class PendingRestoreManager {
         if (originalLocation == null) {
             originalLocation = plugin.getServer().getWorlds().isEmpty()
                 ? new Location(null, 0, 0, 0)
-                : plugin.getServer().getWorlds().get(0).getSpawnLocation();
+                : plugin.getServer().getWorlds().getFirst().getSpawnLocation();
         }
 
         List<PotionEffect> potions = new ArrayList<>();
@@ -216,12 +219,16 @@ public final class PendingRestoreManager {
             if (!(typeKey instanceof String key)) {
                 continue;
             }
-            PotionEffectType type = PotionEffectType.getByKey(NamespacedKey.fromString(key));
+            NamespacedKey namespacedKey = NamespacedKey.fromString(key);
+            if (namespacedKey == null) {
+                continue;
+            }
+            PotionEffectType type = Registry.EFFECT.get(namespacedKey);
             if (type == null) {
                 continue;
             }
-            int duration = asInt(raw.get("duration"), 0);
-            int amplifier = asInt(raw.get("amplifier"), 0);
+            int duration = asInt(raw.get("duration"));
+            int amplifier = asInt(raw.get("amplifier"));
             boolean ambient = asBoolean(raw.get("ambient"));
             boolean particles = asBoolean(raw.get("particles"));
             boolean icon = asBoolean(raw.get("icon"));
@@ -285,11 +292,11 @@ public final class PendingRestoreManager {
         return ItemStack.deserializeBytes(Base64.getDecoder().decode(encoded));
     }
 
-    private int asInt(Object value, int fallback) {
+    private int asInt(Object value) {
         if (value instanceof Number number) {
             return number.intValue();
         }
-        return fallback;
+        return 0;
     }
 
     private boolean asBoolean(Object value) {

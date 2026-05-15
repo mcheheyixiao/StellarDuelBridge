@@ -47,9 +47,11 @@ public final class DuelConfirmMenu {
             DuelMode mode = DuelMode.fromButtonKey(button.key());
             if (mode != null && mode == session.getSelectedMode()) {
                 ItemMeta meta = item.getItemMeta();
-                meta.addEnchant(Enchantment.UNBREAKING, 1, true);
-                meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
-                item.setItemMeta(meta);
+                if (meta != null) {
+                    meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+                    meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+                    item.setItemMeta(meta);
+                }
             }
             if ("info".equalsIgnoreCase(button.key())) {
                 appendContractSummary(item, session);
@@ -62,7 +64,11 @@ public final class DuelConfirmMenu {
 
     private void appendContractSummary(ItemStack item, DuelSession session) {
         ItemMeta meta = item.getItemMeta();
-        List<Component> lore = meta.lore() == null ? new ArrayList<>() : new ArrayList<>(meta.lore());
+        if (meta == null) {
+            return;
+        }
+        List<Component> existingLore = meta.lore();
+        List<Component> lore = existingLore != null ? new ArrayList<>(existingLore) : new ArrayList<>();
         String arena = session.getArenaId() == null ? "待分配" : session.getArenaId();
         String mode = configManager.getDuelSettings().getModeDisplayName(session.getSelectedMode());
         lore.add(MiniMessageUtil.deserialize(""));

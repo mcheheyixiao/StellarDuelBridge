@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.UUID;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
@@ -74,6 +76,8 @@ public final class PlayerSnapshot {
     }
 
     public static PlayerSnapshot capture(Player player) {
+        AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.MAX_HEALTH);
+        double maxHealth = maxHealthAttribute != null ? maxHealthAttribute.getValue() : 20.0D;
         return new PlayerSnapshot(
             player.getUniqueId(),
             player.getName(),
@@ -82,7 +86,7 @@ public final class PlayerSnapshot {
             player.getAllowFlight(),
             player.isFlying(),
             player.getHealth(),
-            player.getMaxHealth(),
+            maxHealth,
             player.getFoodLevel(),
             player.getSaturation(),
             player.getLevel(),
