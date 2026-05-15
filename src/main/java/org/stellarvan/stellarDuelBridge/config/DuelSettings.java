@@ -4,7 +4,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -17,6 +16,7 @@ public final class DuelSettings {
     private final String displayName;
     private final int inviteExpireSeconds;
     private final int requestCooldownSeconds;
+    private final int contractConfirmTimeoutSeconds;
     private final int countdownSeconds;
     private final int maxDurationSeconds;
     private final String returnMode;
@@ -40,12 +40,14 @@ public final class DuelSettings {
     private final EmptyRitualSettings emptyRitualSettings;
     private final CombatSettings combatSettings;
     private final RewardSettings rewardSettings;
+    private final HonorSettings honorSettings;
     private final boolean debugEnabled;
 
     private DuelSettings(
         String displayName,
         int inviteExpireSeconds,
         int requestCooldownSeconds,
+        int contractConfirmTimeoutSeconds,
         int countdownSeconds,
         int maxDurationSeconds,
         String returnMode,
@@ -69,11 +71,13 @@ public final class DuelSettings {
         EmptyRitualSettings emptyRitualSettings,
         CombatSettings combatSettings,
         RewardSettings rewardSettings,
+        HonorSettings honorSettings,
         boolean debugEnabled
     ) {
         this.displayName = displayName;
         this.inviteExpireSeconds = inviteExpireSeconds;
         this.requestCooldownSeconds = requestCooldownSeconds;
+        this.contractConfirmTimeoutSeconds = contractConfirmTimeoutSeconds;
         this.countdownSeconds = countdownSeconds;
         this.maxDurationSeconds = maxDurationSeconds;
         this.returnMode = returnMode;
@@ -97,6 +101,7 @@ public final class DuelSettings {
         this.emptyRitualSettings = emptyRitualSettings;
         this.combatSettings = combatSettings;
         this.rewardSettings = rewardSettings;
+        this.honorSettings = honorSettings;
         this.debugEnabled = debugEnabled;
     }
 
@@ -107,6 +112,7 @@ public final class DuelSettings {
         ConfigurationSection modes = config.getConfigurationSection("modes");
         ConfigurationSection combat = config.getConfigurationSection("combat");
         ConfigurationSection rewards = config.getConfigurationSection("rewards");
+        ConfigurationSection honor = config.getConfigurationSection("honor");
 
         ConfigurationSection realGear = modes.getConfigurationSection("real-gear");
         ConfigurationSection fairKit = modes.getConfigurationSection("fair-kit");
@@ -116,6 +122,7 @@ public final class DuelSettings {
             settings.getString("display-name", "荣誉决斗"),
             Math.max(1, settings.getInt("invite-expire-seconds", 60)),
             Math.max(0, settings.getInt("request-cooldown-seconds", 15)),
+            Math.max(5, settings.getInt("contract-confirm-timeout-seconds", 30)),
             Math.max(1, settings.getInt("countdown-seconds", 5)),
             Math.max(1, settings.getInt("max-duration-seconds", 300)),
             settings.getString("return-mode", "ORIGINAL_LOCATION").toUpperCase(),
@@ -165,6 +172,15 @@ public final class DuelSettings {
                 rewards.getStringList("winner-commands"),
                 rewards.getStringList("loser-commands"),
                 rewards.getStringList("draw-commands")
+            ),
+            new HonorSettings(
+                honor == null || honor.getBoolean("enable", true),
+                honor == null ? 50 : Math.max(0, honor.getInt("daily-cap", 50)),
+                honor == null ? 3 : honor.getInt("win-reward", 3),
+                honor == null ? 1 : honor.getInt("loss-reward", 1),
+                honor == null ? -5 : honor.getInt("surrender-penalty", -5),
+                honor == null ? -3 : honor.getInt("disconnect-penalty", -3),
+                honor == null ? 100 : Math.max(1, honor.getInt("prestige-threshold", 100))
             ),
             config.getBoolean("debug.enabled", false)
         );
@@ -255,6 +271,10 @@ public final class DuelSettings {
 
     public int requestCooldownSeconds() {
         return requestCooldownSeconds;
+    }
+
+    public int contractConfirmTimeoutSeconds() {
+        return contractConfirmTimeoutSeconds;
     }
 
     public int countdownSeconds() {
@@ -349,6 +369,10 @@ public final class DuelSettings {
         return rewardSettings;
     }
 
+    public HonorSettings honorSettings() {
+        return honorSettings;
+    }
+
     public boolean debugEnabled() {
         return debugEnabled;
     }
@@ -420,6 +444,17 @@ public final class DuelSettings {
         List<String> winnerCommands,
         List<String> loserCommands,
         List<String> drawCommands
+    ) {
+    }
+
+    public record HonorSettings(
+        boolean enable,
+        int dailyCap,
+        int winReward,
+        int lossReward,
+        int surrenderPenalty,
+        int disconnectPenalty,
+        int prestigeThreshold
     ) {
     }
 

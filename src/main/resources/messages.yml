@@ -14,7 +14,11 @@ errors:
   teleport-failed: "<red>传送至决斗场失败，本次决斗已取消。"
   disabled-world: "<red>当前世界不允许发起荣誉决斗。"
   command-blocked: "<red>荣誉决斗期间不能使用该命令。"
+  ender-pearl-disabled: "<red>决斗期间禁止使用末影珍珠。"
+  chorus-fruit-disabled: "<red>决斗期间禁止使用紫颂果。"
+  consumables-disabled: "<red>当前契约规则禁止使用消耗品。"
   invalid-mode: "<red>无效的决斗模式。"
+  contract-confirm-timeout: "<red>荣誉契约确认超时，本次决斗已取消。"
   database-error: "<red>荣誉决斗数据读写失败，请联系管理员。"
   invite-pending: "<red>你或对方还有未处理的决斗邀请。"
   cooldown: "<red>你需要等待 <yellow>{seconds}</yellow> 秒后才能再次发起荣誉决斗。"
@@ -46,6 +50,7 @@ duel:
   quit-lose: "<yellow>{player}</yellow> <gray>在决斗中离线，判定失败。"
   returned: "<gray>你已返回决斗前位置。"
   mode-selected: "<gray>已选择模式：<yellow>{mode}</yellow>"
+  contract-waiting: "<gray>你已确认契约，等待对方确认。"
 
 admin:
   arena-created: "<green>已创建决斗场配置：<yellow>{arena}</yellow>"

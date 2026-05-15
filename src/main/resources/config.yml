@@ -2,6 +2,7 @@ settings:
   display-name: "荣誉决斗"
   invite-expire-seconds: 60
   request-cooldown-seconds: 15
+  contract-confirm-timeout-seconds: 30
   countdown-seconds: 5
   max-duration-seconds: 300
   return-mode: ORIGINAL_LOCATION
@@ -146,6 +147,15 @@ rewards:
   winner-commands: []
   loser-commands: []
   draw-commands: []
+
+honor:
+  enable: true
+  daily-cap: 50
+  win-reward: 3
+  loss-reward: 1
+  surrender-penalty: -5
+  disconnect-penalty: -3
+  prestige-threshold: 100
 
 debug:
   enabled: false

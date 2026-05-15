@@ -23,6 +23,11 @@ public final class DuelSession {
     private DuelEndReason endReason;
     private PlayerSnapshot playerOneSnapshot;
     private PlayerSnapshot playerTwoSnapshot;
+    private String playerOneIp;
+    private String playerTwoIp;
+    private boolean challengerConfirmed;
+    private boolean targetConfirmed;
+    private BukkitTask contractTimeoutTask;
     private BukkitTask countdownTask;
     private BukkitTask timeoutTask;
 
@@ -149,6 +154,68 @@ public final class DuelSession {
         this.playerTwoSnapshot = playerTwoSnapshot;
     }
 
+    public String getPlayerOneIp() {
+        return playerOneIp;
+    }
+
+    public void setPlayerOneIp(String playerOneIp) {
+        this.playerOneIp = playerOneIp;
+    }
+
+    public String getPlayerTwoIp() {
+        return playerTwoIp;
+    }
+
+    public void setPlayerTwoIp(String playerTwoIp) {
+        this.playerTwoIp = playerTwoIp;
+    }
+
+    public boolean isChallengerConfirmed() {
+        return challengerConfirmed;
+    }
+
+    public void setChallengerConfirmed(boolean challengerConfirmed) {
+        this.challengerConfirmed = challengerConfirmed;
+    }
+
+    public boolean isTargetConfirmed() {
+        return targetConfirmed;
+    }
+
+    public void setTargetConfirmed(boolean targetConfirmed) {
+        this.targetConfirmed = targetConfirmed;
+    }
+
+    public boolean areBothConfirmed() {
+        return challengerConfirmed && targetConfirmed;
+    }
+
+    public boolean isPlayerConfirmed(UUID playerId) {
+        if (playerOne.equals(playerId)) {
+            return challengerConfirmed;
+        }
+        if (playerTwo.equals(playerId)) {
+            return targetConfirmed;
+        }
+        return false;
+    }
+
+    public void setPlayerConfirmed(UUID playerId, boolean confirmed) {
+        if (playerOne.equals(playerId)) {
+            challengerConfirmed = confirmed;
+        } else if (playerTwo.equals(playerId)) {
+            targetConfirmed = confirmed;
+        }
+    }
+
+    public BukkitTask getContractTimeoutTask() {
+        return contractTimeoutTask;
+    }
+
+    public void setContractTimeoutTask(BukkitTask contractTimeoutTask) {
+        this.contractTimeoutTask = contractTimeoutTask;
+    }
+
     public BukkitTask getCountdownTask() {
         return countdownTask;
     }
@@ -190,6 +257,10 @@ public final class DuelSession {
     }
 
     public void cancelTasks() {
+        if (contractTimeoutTask != null) {
+            contractTimeoutTask.cancel();
+            contractTimeoutTask = null;
+        }
         if (countdownTask != null) {
             countdownTask.cancel();
             countdownTask = null;

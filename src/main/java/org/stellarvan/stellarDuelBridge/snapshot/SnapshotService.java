@@ -1,6 +1,8 @@
 package org.stellarvan.stellarDuelBridge.snapshot;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Location;
@@ -14,10 +16,21 @@ import org.stellarvan.stellarDuelBridge.duel.DuelMode;
 public final class SnapshotService {
 
     private final StellarDuelBridge plugin;
+    private final PendingRestoreManager pendingRestoreManager;
     private final Map<UUID, DeferredRestore> deferredRestores = new ConcurrentHashMap<>();
 
     public SnapshotService(StellarDuelBridge plugin) {
-        this.plugin = plugin;
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.pendingRestoreManager = new PendingRestoreManager(plugin);
+        this.pendingRestoreManager.init();
+        try {
+            List<PendingRestoreManager.PendingRestoreRecord> records = pendingRestoreManager.loadAll().join();
+            for (PendingRestoreManager.PendingRestoreRecord record : records) {
+                deferredRestores.put(record.playerId(), new DeferredRestore(record.snapshot(), record.returnLocation(), record.mode()));
+            }
+        } catch (Exception exception) {
+            plugin.getLogger().severe("Failed to load persisted pending restores: " + exception.getMessage());
+        }
     }
 
     public PlayerSnapshot capture(Player player) {
@@ -70,15 +83,43 @@ public final class SnapshotService {
     }
 
     public void queueDeferredRestore(UUID playerId, PlayerSnapshot snapshot, Location returnLocation, DuelMode mode) {
-        deferredRestores.put(playerId, new DeferredRestore(snapshot, returnLocation, mode));
+        putPendingRestore(playerId, snapshot, returnLocation, mode);
+    }
+
+    public void registerPendingRestore(UUID playerId, PlayerSnapshot snapshot, Location returnLocation, DuelMode mode) {
+        putPendingRestore(playerId, snapshot, returnLocation, mode);
     }
 
     public DeferredRestore consumeDeferredRestore(UUID playerId) {
         return deferredRestores.remove(playerId);
     }
 
+    public void clearPendingRestore(UUID playerId) {
+        deferredRestores.remove(playerId);
+        pendingRestoreManager.remove(playerId).exceptionally(throwable -> {
+            plugin.getLogger().severe("Failed to clear pending restore for " + playerId + ": " + throwable.getMessage());
+            return null;
+        });
+    }
+
     public boolean hasDeferredRestore(UUID playerId) {
         return deferredRestores.containsKey(playerId);
+    }
+
+    public List<UUID> getPendingRestorePlayers() {
+        return List.copyOf(deferredRestores.keySet());
+    }
+
+    public void shutdown() {
+        pendingRestoreManager.close();
+    }
+
+    private void putPendingRestore(UUID playerId, PlayerSnapshot snapshot, Location returnLocation, DuelMode mode) {
+        deferredRestores.put(playerId, new DeferredRestore(snapshot, returnLocation, mode));
+        pendingRestoreManager.upsert(playerId, snapshot, returnLocation, mode).exceptionally(throwable -> {
+            plugin.getLogger().severe("Failed to persist pending restore for " + playerId + ": " + throwable.getMessage());
+            return null;
+        });
     }
 
     public record DeferredRestore(PlayerSnapshot snapshot, Location returnLocation, DuelMode mode) {

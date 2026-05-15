@@ -8,6 +8,7 @@ description: 生存服内的仪式化私人决斗系统，为繁星World提供�
 website: https://www.stellarvan.cn
 
 softdepend:
+  - Towny
   - PvPManager
   - Multiverse-Core
   - WorldGuard

@@ -12,6 +12,8 @@ public final class DuelStats {
     private int quits;
     private int currentStreak;
     private int bestStreak;
+    private int honor;
+    private int prestige;
     private int totalMatches;
     private int totalDurationSeconds;
     private String lastMode;
@@ -85,6 +87,22 @@ public final class DuelStats {
 
     public void setBestStreak(int bestStreak) {
         this.bestStreak = bestStreak;
+    }
+
+    public int getHonor() {
+        return honor;
+    }
+
+    public void setHonor(int honor) {
+        this.honor = honor;
+    }
+
+    public int getPrestige() {
+        return prestige;
+    }
+
+    public void setPrestige(int prestige) {
+        this.prestige = prestige;
     }
 
     public int getTotalMatches() {

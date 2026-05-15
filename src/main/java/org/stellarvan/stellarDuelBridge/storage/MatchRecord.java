@@ -16,6 +16,8 @@ public record MatchRecord(
     long startedAt,
     long endedAt,
     int durationSeconds,
+    int playerOneHonorDelta,
+    int playerTwoHonorDelta,
     long createdAt
 ) {
 }

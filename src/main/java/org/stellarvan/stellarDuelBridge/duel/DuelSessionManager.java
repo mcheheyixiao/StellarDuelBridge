@@ -1,7 +1,6 @@
 package org.stellarvan.stellarDuelBridge.duel;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -13,7 +12,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -203,15 +203,13 @@ public final class DuelSessionManager {
             configManager.getDuelSettings().defaultMode()
         );
         session.setState(DuelState.MODE_SELECTING);
+        session.setChallengerConfirmed(false);
+        session.setTargetConfirmed(false);
         registerSession(session);
         messageManager.sendMessage(challenger, "duel.accepted");
         messageManager.sendMessage(target, "duel.accepted");
-
-        if (!configManager.getDuelSettings().allowPlayerSelection()) {
-            beginSessionPreparation(session);
-            return;
-        }
-        duelConfirmMenu.open(target, session.getSessionId(), session.getSelectedMode());
+        openContractMenus(session);
+        scheduleContractTimeout(session);
     }
 
     public void denyInvite(Player target) {
@@ -272,23 +270,34 @@ public final class DuelSessionManager {
         }
         DuelMode mode = DuelMode.fromButtonKey(clickedButton.key());
         if (mode != null) {
+            if (!configManager.getDuelSettings().allowPlayerSelection()) {
+                return;
+            }
             if (!configManager.getDuelSettings().isModeEnabled(mode)) {
                 messageManager.sendMessage(player, "errors.invalid-mode");
                 return;
             }
             session.setSelectedMode(mode);
+            session.setChallengerConfirmed(false);
+            session.setTargetConfirmed(false);
             holder.setSelectedMode(mode);
             messageManager.sendMessage(player, "duel.mode-selected", Map.of("mode", configManager.getDuelSettings().getModeDisplayName(mode)));
-            duelConfirmMenu.open(player, session.getSessionId(), mode);
+            refreshContractMenus(session);
             return;
         }
         switch (clickedButton.key().toLowerCase(Locale.ROOT)) {
             case "confirm" -> {
-                player.closeInventory();
-                beginSessionPreparation(session);
+                session.setPlayerConfirmed(player.getUniqueId(), true);
+                if (session.areBothConfirmed()) {
+                    closeContractMenus(session);
+                    beginSessionPreparation(session);
+                } else {
+                    refreshContractMenus(session);
+                    messageManager.sendMessage(player, "duel.contract-waiting");
+                }
             }
             case "deny" -> {
-                player.closeInventory();
+                closeContractMenus(session);
                 cancelSession(session, DuelEndReason.ADMIN_CANCEL);
             }
             default -> {
@@ -310,7 +319,7 @@ public final class DuelSessionManager {
                 return;
             }
             if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof DuelMenuHolder)) {
-                duelConfirmMenu.open(player, latest.getSessionId(), latest.getSelectedMode());
+                duelConfirmMenu.open(player, latest);
             }
         }, 1L);
     }
@@ -361,8 +370,14 @@ public final class DuelSessionManager {
         if (restore == null) {
             return;
         }
-        snapshotService.restore(player, restore.snapshot(), configManager.getDuelSettings(), restore.mode());
-        returnPlayer(player, restore.returnLocation());
+        try {
+            snapshotService.restore(player, restore.snapshot(), configManager.getDuelSettings(), restore.mode());
+            snapshotService.clearPendingRestore(player.getUniqueId());
+            returnPlayer(player, restore.returnLocation());
+        } catch (Exception exception) {
+            snapshotService.queueDeferredRestore(player.getUniqueId(), restore.snapshot(), restore.returnLocation(), restore.mode());
+            plugin.getLogger().severe("Failed to apply deferred restore for " + player.getName() + ": " + exception.getMessage());
+        }
     }
 
     public void shutdown() {
@@ -479,9 +494,82 @@ public final class DuelSessionManager {
             .orElse(null);
     }
 
+    private void openContractMenus(DuelSession session) {
+        Player challenger = Bukkit.getPlayer(session.getPlayerOne());
+        Player target = Bukkit.getPlayer(session.getPlayerTwo());
+        if (challenger != null && challenger.isOnline()) {
+            duelConfirmMenu.open(challenger, session);
+        }
+        if (target != null && target.isOnline()) {
+            duelConfirmMenu.open(target, session);
+        }
+    }
+
+    private void refreshContractMenus(DuelSession session) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            DuelSession live = sessionsById.get(session.getSessionId());
+            if (live == null || live.getState() != DuelState.MODE_SELECTING) {
+                return;
+            }
+            openContractMenus(live);
+        });
+    }
+
+    private void closeContractMenus(DuelSession session) {
+        Player challenger = Bukkit.getPlayer(session.getPlayerOne());
+        Player target = Bukkit.getPlayer(session.getPlayerTwo());
+        closeContractMenuIfOpen(challenger, session.getSessionId());
+        closeContractMenuIfOpen(target, session.getSessionId());
+    }
+
+    private void closeContractMenuIfOpen(Player player, UUID sessionId) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof DuelMenuHolder holder)) {
+            return;
+        }
+        if (!holder.getSessionId().equals(sessionId)) {
+            return;
+        }
+        player.closeInventory();
+    }
+
+    private void scheduleContractTimeout(DuelSession session) {
+        int timeoutSeconds = configManager.getDuelSettings().contractConfirmTimeoutSeconds();
+        if (timeoutSeconds <= 0) {
+            return;
+        }
+        BukkitTask timeoutTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            DuelSession live = sessionsById.get(session.getSessionId());
+            if (live == null || live.getState() != DuelState.MODE_SELECTING || live.areBothConfirmed()) {
+                return;
+            }
+            closeContractMenus(live);
+            Player challenger = Bukkit.getPlayer(live.getPlayerOne());
+            Player target = Bukkit.getPlayer(live.getPlayerTwo());
+            if (challenger != null) {
+                messageManager.sendMessage(challenger, "errors.contract-confirm-timeout");
+            }
+            if (target != null) {
+                messageManager.sendMessage(target, "errors.contract-confirm-timeout");
+            }
+            cancelSession(live, DuelEndReason.ADMIN_CANCEL);
+        }, timeoutSeconds * 20L);
+        session.setContractTimeoutTask(timeoutTask);
+    }
+
     private void beginSessionPreparation(DuelSession session) {
         if (session.getState() != DuelState.MODE_SELECTING) {
             return;
+        }
+        if (!session.areBothConfirmed()) {
+            return;
+        }
+        BukkitTask contractTask = session.getContractTimeoutTask();
+        if (contractTask != null) {
+            contractTask.cancel();
+            session.setContractTimeoutTask(null);
         }
         Player playerOne = Bukkit.getPlayer(session.getPlayerOne());
         Player playerTwo = Bukkit.getPlayer(session.getPlayerTwo());
@@ -514,8 +602,22 @@ public final class DuelSessionManager {
         session.setState(DuelState.PREPARING);
         session.setArenaId(arena.getId());
         session.setMode(session.getSelectedMode());
+        session.setPlayerOneIp(resolvePlayerIp(playerOne));
+        session.setPlayerTwoIp(resolvePlayerIp(playerTwo));
         session.setPlayerOneSnapshot(snapshotService.capture(playerOne));
         session.setPlayerTwoSnapshot(snapshotService.capture(playerTwo));
+        Location playerOneReturn = snapshotService.determineReturnLocation(
+            session.getPlayerOneSnapshot(),
+            configManager.getDuelSettings(),
+            configManager.getReturnLocation()
+        );
+        Location playerTwoReturn = snapshotService.determineReturnLocation(
+            session.getPlayerTwoSnapshot(),
+            configManager.getDuelSettings(),
+            configManager.getReturnLocation()
+        );
+        snapshotService.registerPendingRestore(session.getPlayerOne(), session.getPlayerOneSnapshot(), playerOneReturn, session.getMode());
+        snapshotService.registerPendingRestore(session.getPlayerTwo(), session.getPlayerTwoSnapshot(), playerTwoReturn, session.getMode());
         arenaManager.markOccupied(arena.getId());
         messageManager.sendMessage(playerOne, "duel.preparing", Map.of("arena", arena.getId()));
         messageManager.sendMessage(playerTwo, "duel.preparing", Map.of("arena", arena.getId()));
@@ -819,8 +921,14 @@ public final class DuelSessionManager {
             snapshotService.queueDeferredRestore(player.getUniqueId(), snapshot, target, mode);
             return;
         }
-        snapshotService.restore(player, snapshot, configManager.getDuelSettings(), mode);
-        returnPlayer(player, target);
+        try {
+            snapshotService.restore(player, snapshot, configManager.getDuelSettings(), mode);
+            snapshotService.clearPendingRestore(player.getUniqueId());
+            returnPlayer(player, target);
+        } catch (Exception exception) {
+            snapshotService.queueDeferredRestore(player.getUniqueId(), snapshot, target, mode);
+            plugin.getLogger().severe("Failed to restore snapshot for " + player.getName() + ": " + exception.getMessage());
+        }
     }
 
     private void queueDeferredReturn(UUID playerId, PlayerSnapshot snapshot, DuelMode mode) {
@@ -847,39 +955,72 @@ public final class DuelSessionManager {
         int duration = Math.max(0, (int) (session.getEndedAt() - Math.max(session.getCreatedAt() / 1000L, session.getStartedAt())));
         String winnerName = session.getWinner() == null ? null : session.getPlayerOne().equals(session.getWinner()) ? session.getPlayerOneName() : session.getPlayerTwoName();
         String loserName = session.getLoser() == null ? null : session.getPlayerOne().equals(session.getLoser()) ? session.getPlayerOneName() : session.getPlayerTwoName();
-        MatchRecord record = new MatchRecord(
-            session.getArenaId() == null ? "unknown" : session.getArenaId(),
-            session.getMode() == null ? configManager.getDuelSettings().defaultMode().name() : session.getMode().name(),
-            session.getPlayerOne().toString(),
-            session.getPlayerOneName(),
-            session.getPlayerTwo().toString(),
-            session.getPlayerTwoName(),
-            session.getWinner() == null ? null : session.getWinner().toString(),
-            winnerName,
-            session.getLoser() == null ? null : session.getLoser().toString(),
-            loserName,
-            result.name(),
-            session.getEndReason().name(),
-            session.getStartedAt() > 0L ? session.getStartedAt() : session.getCreatedAt() / 1000L,
-            session.getEndedAt(),
-            duration,
-            System.currentTimeMillis() / 1000L
-        );
+        long now = System.currentTimeMillis() / 1000L;
+        long dayStart = LocalDate.now(ZoneId.systemDefault()).atStartOfDay(ZoneId.systemDefault()).toEpochSecond();
+        long dayEnd = dayStart + TimeUnit.DAYS.toSeconds(1);
+        long pairWindowStart = now - TimeUnit.HOURS.toSeconds(24);
 
         CompletableFuture<DuelStats> playerOneStatsFuture = storageProvider.loadStats(session.getPlayerOne(), session.getPlayerOneName());
         CompletableFuture<DuelStats> playerTwoStatsFuture = storageProvider.loadStats(session.getPlayerTwo(), session.getPlayerTwoName());
-        playerOneStatsFuture.thenCombine(playerTwoStatsFuture, (playerOneStats, playerTwoStats) -> {
-            updateStats(playerOneStats, playerTwoStats, session, result, duration);
-            return List.of(playerOneStats, playerTwoStats);
-        }).thenCompose(stats -> storageProvider.saveStats(stats.get(0)).thenCompose(v -> storageProvider.saveStats(stats.get(1))))
-            .thenCompose(v -> storageProvider.recordMatch(record))
+        CompletableFuture<Integer> pairCountFuture = storageProvider.countPairMatchesSince(session.getPlayerOne(), session.getPlayerTwo(), pairWindowStart);
+        CompletableFuture<Integer> playerOneDailyHonorFuture = storageProvider.getDailyPositiveHonor(session.getPlayerOne(), dayStart, dayEnd);
+        CompletableFuture<Integer> playerTwoDailyHonorFuture = storageProvider.getDailyPositiveHonor(session.getPlayerTwo(), dayStart, dayEnd);
+
+        CompletableFuture.allOf(
+            playerOneStatsFuture,
+            playerTwoStatsFuture,
+            pairCountFuture,
+            playerOneDailyHonorFuture,
+            playerTwoDailyHonorFuture
+        ).thenCompose(ignored -> {
+            DuelStats playerOneStats = playerOneStatsFuture.join();
+            DuelStats playerTwoStats = playerTwoStatsFuture.join();
+            int pairCount = pairCountFuture.join();
+            int playerOneDailyHonor = playerOneDailyHonorFuture.join();
+            int playerTwoDailyHonor = playerTwoDailyHonorFuture.join();
+
+            HonorDelta honorDelta = computeHonorDeltas(session, result, pairCount, playerOneDailyHonor, playerTwoDailyHonor);
+            updateStats(playerOneStats, playerTwoStats, session, result, duration, honorDelta);
+
+            MatchRecord record = new MatchRecord(
+                session.getArenaId() == null ? "unknown" : session.getArenaId(),
+                session.getMode() == null ? configManager.getDuelSettings().defaultMode().name() : session.getMode().name(),
+                session.getPlayerOne().toString(),
+                session.getPlayerOneName(),
+                session.getPlayerTwo().toString(),
+                session.getPlayerTwoName(),
+                session.getWinner() == null ? null : session.getWinner().toString(),
+                winnerName,
+                session.getLoser() == null ? null : session.getLoser().toString(),
+                loserName,
+                result.name(),
+                session.getEndReason().name(),
+                session.getStartedAt() > 0L ? session.getStartedAt() : session.getCreatedAt() / 1000L,
+                session.getEndedAt(),
+                duration,
+                honorDelta.playerOneDelta(),
+                honorDelta.playerTwoDelta(),
+                now
+            );
+
+            return storageProvider.saveStats(playerOneStats)
+                .thenCompose(v -> storageProvider.saveStats(playerTwoStats))
+                .thenCompose(v -> storageProvider.recordMatch(record));
+        })
             .exceptionally(throwable -> {
                 plugin.getLogger().severe("Failed to persist duel result: " + throwable.getMessage());
                 return null;
             });
     }
 
-    private void updateStats(DuelStats playerOneStats, DuelStats playerTwoStats, DuelSession session, DuelResult result, int duration) {
+    private void updateStats(
+        DuelStats playerOneStats,
+        DuelStats playerTwoStats,
+        DuelSession session,
+        DuelResult result,
+        int duration,
+        HonorDelta honorDelta
+    ) {
         long now = System.currentTimeMillis() / 1000L;
         playerOneStats.setName(session.getPlayerOneName());
         playerTwoStats.setName(session.getPlayerTwoName());
@@ -922,6 +1063,106 @@ public final class DuelSessionManager {
             case CANCELLED -> {
             }
         }
+        int prestigeThreshold = configManager.getDuelSettings().honorSettings().prestigeThreshold();
+        applyHonorWithPrestige(playerOneStats, honorDelta.playerOneDelta(), prestigeThreshold);
+        applyHonorWithPrestige(playerTwoStats, honorDelta.playerTwoDelta(), prestigeThreshold);
+    }
+
+    private HonorDelta computeHonorDeltas(
+        DuelSession session,
+        DuelResult result,
+        int pairMatchesInLast24Hours,
+        int playerOneDailyHonor,
+        int playerTwoDailyHonor
+    ) {
+        DuelSettings.HonorSettings honorSettings = configManager.getDuelSettings().honorSettings();
+        if (!honorSettings.enable()) {
+            return new HonorDelta(0, 0);
+        }
+        String playerOneIp = session.getPlayerOneIp();
+        String playerTwoIp = session.getPlayerTwoIp();
+        if (playerOneIp != null && playerTwoIp != null && playerOneIp.equals(playerTwoIp)) {
+            return new HonorDelta(0, 0);
+        }
+
+        int playerOneDelta = 0;
+        int playerTwoDelta = 0;
+        switch (result) {
+            case PLAYER_ONE_WIN -> {
+                playerOneDelta = honorSettings.winReward();
+                playerTwoDelta = switch (session.getEndReason()) {
+                    case SURRENDER -> honorSettings.surrenderPenalty();
+                    case QUIT -> honorSettings.disconnectPenalty();
+                    default -> honorSettings.lossReward();
+                };
+            }
+            case PLAYER_TWO_WIN -> {
+                playerTwoDelta = honorSettings.winReward();
+                playerOneDelta = switch (session.getEndReason()) {
+                    case SURRENDER -> honorSettings.surrenderPenalty();
+                    case QUIT -> honorSettings.disconnectPenalty();
+                    default -> honorSettings.lossReward();
+                };
+            }
+            case DRAW, CANCELLED -> {
+                playerOneDelta = 0;
+                playerTwoDelta = 0;
+            }
+        }
+
+        playerOneDelta = applyPairDecay(playerOneDelta, pairMatchesInLast24Hours);
+        playerTwoDelta = applyPairDecay(playerTwoDelta, pairMatchesInLast24Hours);
+        playerOneDelta = applyDailyCap(playerOneDelta, playerOneDailyHonor, honorSettings.dailyCap());
+        playerTwoDelta = applyDailyCap(playerTwoDelta, playerTwoDailyHonor, honorSettings.dailyCap());
+        return new HonorDelta(playerOneDelta, playerTwoDelta);
+    }
+
+    private int applyPairDecay(int delta, int pairMatchesInLast24Hours) {
+        if (delta <= 0) {
+            return delta;
+        }
+        double multiplier = switch (pairMatchesInLast24Hours) {
+            case 0 -> 1.0D;
+            case 1 -> 0.5D;
+            case 2 -> 0.25D;
+            default -> 0.0D;
+        };
+        return (int) Math.floor(delta * multiplier);
+    }
+
+    private int applyDailyCap(int delta, int usedHonor, int dailyCap) {
+        if (delta <= 0) {
+            return delta;
+        }
+        if (dailyCap <= 0) {
+            return 0;
+        }
+        int remaining = dailyCap - usedHonor;
+        if (remaining <= 0) {
+            return 0;
+        }
+        return Math.min(delta, remaining);
+    }
+
+    private void applyHonorWithPrestige(DuelStats stats, int honorDelta, int prestigeThreshold) {
+        int updatedHonor = Math.max(0, stats.getHonor() + honorDelta);
+        int prestige = stats.getPrestige();
+        while (updatedHonor >= prestigeThreshold) {
+            updatedHonor -= prestigeThreshold;
+            prestige++;
+        }
+        stats.setHonor(updatedHonor);
+        stats.setPrestige(prestige);
+    }
+
+    private record HonorDelta(int playerOneDelta, int playerTwoDelta) {
+    }
+
+    private String resolvePlayerIp(Player player) {
+        if (player.getAddress() == null || player.getAddress().getAddress() == null) {
+            return null;
+        }
+        return player.getAddress().getAddress().getHostAddress();
     }
 
     private void clearInventory(Player player) {

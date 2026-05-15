@@ -64,6 +64,8 @@ public final class SQLiteStorageProvider implements StorageProvider {
                       quits INTEGER NOT NULL DEFAULT 0,
                       current_streak INTEGER NOT NULL DEFAULT 0,
                       best_streak INTEGER NOT NULL DEFAULT 0,
+                      honor INTEGER NOT NULL DEFAULT 0,
+                      prestige INTEGER NOT NULL DEFAULT 0,
                       total_matches INTEGER NOT NULL DEFAULT 0,
                       total_duration_seconds INTEGER NOT NULL DEFAULT 0,
                       last_mode TEXT,
@@ -93,6 +95,8 @@ public final class SQLiteStorageProvider implements StorageProvider {
                       started_at INTEGER NOT NULL,
                       ended_at INTEGER NOT NULL,
                       duration_seconds INTEGER NOT NULL,
+                      player_one_honor_delta INTEGER NOT NULL DEFAULT 0,
+                      player_two_honor_delta INTEGER NOT NULL DEFAULT 0,
                       created_at INTEGER NOT NULL
                     )
                     """);
@@ -100,6 +104,10 @@ public final class SQLiteStorageProvider implements StorageProvider {
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_duel_matches_player_two ON duel_matches(player_two_uuid)");
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_duel_matches_winner ON duel_matches(winner_uuid)");
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_duel_matches_started_at ON duel_matches(started_at DESC)");
+                ensureColumnExists(statement, "ALTER TABLE duel_players ADD COLUMN honor INTEGER NOT NULL DEFAULT 0");
+                ensureColumnExists(statement, "ALTER TABLE duel_players ADD COLUMN prestige INTEGER NOT NULL DEFAULT 0");
+                ensureColumnExists(statement, "ALTER TABLE duel_matches ADD COLUMN player_one_honor_delta INTEGER NOT NULL DEFAULT 0");
+                ensureColumnExists(statement, "ALTER TABLE duel_matches ADD COLUMN player_two_honor_delta INTEGER NOT NULL DEFAULT 0");
             }
         } catch (Exception exception) {
             throw new IllegalStateException("Failed to initialize SQLite storage.", exception);
@@ -140,6 +148,8 @@ public final class SQLiteStorageProvider implements StorageProvider {
                         stats.setQuits(resultSet.getInt("quits"));
                         stats.setCurrentStreak(resultSet.getInt("current_streak"));
                         stats.setBestStreak(resultSet.getInt("best_streak"));
+                        stats.setHonor(resultSet.getInt("honor"));
+                        stats.setPrestige(resultSet.getInt("prestige"));
                         stats.setTotalMatches(resultSet.getInt("total_matches"));
                         stats.setTotalDurationSeconds(resultSet.getInt("total_duration_seconds"));
                         stats.setLastMode(resultSet.getString("last_mode"));
@@ -168,8 +178,8 @@ public final class SQLiteStorageProvider implements StorageProvider {
             try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO duel_players (
                   uuid, name, wins, losses, draws, quits, current_streak, best_streak, total_matches,
-                  total_duration_seconds, last_mode, last_match_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  honor, prestige, total_duration_seconds, last_mode, last_match_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(uuid) DO UPDATE SET
                   name = excluded.name,
                   wins = excluded.wins,
@@ -178,6 +188,8 @@ public final class SQLiteStorageProvider implements StorageProvider {
                   quits = excluded.quits,
                   current_streak = excluded.current_streak,
                   best_streak = excluded.best_streak,
+                  honor = excluded.honor,
+                  prestige = excluded.prestige,
                   total_matches = excluded.total_matches,
                   total_duration_seconds = excluded.total_duration_seconds,
                   last_mode = excluded.last_mode,
@@ -193,11 +205,13 @@ public final class SQLiteStorageProvider implements StorageProvider {
                 statement.setInt(7, stats.getCurrentStreak());
                 statement.setInt(8, stats.getBestStreak());
                 statement.setInt(9, stats.getTotalMatches());
-                statement.setInt(10, stats.getTotalDurationSeconds());
-                statement.setString(11, stats.getLastMode());
-                statement.setLong(12, stats.getLastMatchAt());
-                statement.setLong(13, stats.getCreatedAt());
-                statement.setLong(14, stats.getUpdatedAt());
+                statement.setInt(10, stats.getHonor());
+                statement.setInt(11, stats.getPrestige());
+                statement.setInt(12, stats.getTotalDurationSeconds());
+                statement.setString(13, stats.getLastMode());
+                statement.setLong(14, stats.getLastMatchAt());
+                statement.setLong(15, stats.getCreatedAt());
+                statement.setLong(16, stats.getUpdatedAt());
                 statement.executeUpdate();
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to save duel stats for " + stats.getUuid(), exception);
@@ -212,8 +226,8 @@ public final class SQLiteStorageProvider implements StorageProvider {
                 INSERT INTO duel_matches (
                   arena_id, mode, player_one_uuid, player_one_name, player_two_uuid, player_two_name,
                   winner_uuid, winner_name, loser_uuid, loser_name, result, end_reason,
-                  started_at, ended_at, duration_seconds, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  started_at, ended_at, duration_seconds, player_one_honor_delta, player_two_honor_delta, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)) {
                 statement.setString(1, record.arenaId());
                 statement.setString(2, record.mode());
@@ -230,7 +244,9 @@ public final class SQLiteStorageProvider implements StorageProvider {
                 statement.setLong(13, record.startedAt());
                 statement.setLong(14, record.endedAt());
                 statement.setInt(15, record.durationSeconds());
-                statement.setLong(16, record.createdAt());
+                statement.setInt(16, record.playerOneHonorDelta());
+                statement.setInt(17, record.playerTwoHonorDelta());
+                statement.setLong(18, record.createdAt());
                 statement.executeUpdate();
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to record duel match.", exception);
@@ -248,6 +264,68 @@ public final class SQLiteStorageProvider implements StorageProvider {
         return loadLeaderboard("SELECT * FROM duel_players ORDER BY best_streak DESC, wins DESC LIMIT ?", limit);
     }
 
+    @Override
+    public CompletableFuture<Integer> countPairMatchesSince(UUID playerOne, UUID playerTwo, long sinceEpochSecond) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT COUNT(*) AS pair_count
+                FROM duel_matches
+                WHERE started_at >= ?
+                  AND (
+                    (player_one_uuid = ? AND player_two_uuid = ?)
+                    OR
+                    (player_one_uuid = ? AND player_two_uuid = ?)
+                  )
+                  AND result IN ('PLAYER_ONE_WIN', 'PLAYER_TWO_WIN', 'DRAW')
+                """)) {
+                statement.setLong(1, sinceEpochSecond);
+                statement.setString(2, playerOne.toString());
+                statement.setString(3, playerTwo.toString());
+                statement.setString(4, playerTwo.toString());
+                statement.setString(5, playerOne.toString());
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    if (resultSet.next()) {
+                        return resultSet.getInt("pair_count");
+                    }
+                }
+                return 0;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to load recent pair matches.", exception);
+            }
+        }, executor);
+    }
+
+    @Override
+    public CompletableFuture<Integer> getDailyPositiveHonor(UUID playerId, long dayStartEpochSecond, long dayEndEpochSecond) {
+        return CompletableFuture.supplyAsync(() -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT COALESCE(SUM(
+                    CASE WHEN player_one_uuid = ? AND player_one_honor_delta > 0 THEN player_one_honor_delta ELSE 0 END +
+                    CASE WHEN player_two_uuid = ? AND player_two_honor_delta > 0 THEN player_two_honor_delta ELSE 0 END
+                ), 0) AS total_honor
+                FROM duel_matches
+                WHERE created_at >= ? AND created_at < ?
+                  AND (player_one_uuid = ? OR player_two_uuid = ?)
+                """)) {
+                String uuid = playerId.toString();
+                statement.setString(1, uuid);
+                statement.setString(2, uuid);
+                statement.setLong(3, dayStartEpochSecond);
+                statement.setLong(4, dayEndEpochSecond);
+                statement.setString(5, uuid);
+                statement.setString(6, uuid);
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    if (resultSet.next()) {
+                        return resultSet.getInt("total_honor");
+                    }
+                }
+                return 0;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to load daily honor cap usage.", exception);
+            }
+        }, executor);
+    }
+
     private CompletableFuture<List<DuelStats>> loadLeaderboard(String sql, int limit) {
         return CompletableFuture.supplyAsync(() -> {
             List<DuelStats> results = new ArrayList<>();
@@ -262,6 +340,8 @@ public final class SQLiteStorageProvider implements StorageProvider {
                         stats.setQuits(resultSet.getInt("quits"));
                         stats.setCurrentStreak(resultSet.getInt("current_streak"));
                         stats.setBestStreak(resultSet.getInt("best_streak"));
+                        stats.setHonor(resultSet.getInt("honor"));
+                        stats.setPrestige(resultSet.getInt("prestige"));
                         stats.setTotalMatches(resultSet.getInt("total_matches"));
                         stats.setTotalDurationSeconds(resultSet.getInt("total_duration_seconds"));
                         stats.setLastMode(resultSet.getString("last_mode"));
@@ -276,5 +356,16 @@ public final class SQLiteStorageProvider implements StorageProvider {
             }
             return results;
         }, executor);
+    }
+
+    private void ensureColumnExists(Statement statement, String sql) throws Exception {
+        try {
+            statement.execute(sql);
+        } catch (java.sql.SQLException exception) {
+            String message = exception.getMessage() == null ? "" : exception.getMessage().toLowerCase();
+            if (!message.contains("duplicate column name")) {
+                throw exception;
+            }
+        }
     }
 }

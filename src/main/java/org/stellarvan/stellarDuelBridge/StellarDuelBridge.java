@@ -2,7 +2,9 @@ package org.stellarvan.stellarDuelBridge;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import java.util.UUID;
 import org.stellarvan.stellarDuelBridge.arena.ArenaManager;
 import org.stellarvan.stellarDuelBridge.command.CommandContext;
 import org.stellarvan.stellarDuelBridge.command.DuelAdminCommand;
@@ -13,16 +15,22 @@ import org.stellarvan.stellarDuelBridge.duel.DuelSessionManager;
 import org.stellarvan.stellarDuelBridge.hook.HookManager;
 import org.stellarvan.stellarDuelBridge.listener.CommandBlockListener;
 import org.stellarvan.stellarDuelBridge.listener.CombatListener;
+import org.stellarvan.stellarDuelBridge.listener.ConsumableListener;
+import org.stellarvan.stellarDuelBridge.listener.ChorusFruitListener;
 import org.stellarvan.stellarDuelBridge.listener.DeathListener;
+import org.stellarvan.stellarDuelBridge.listener.DuelDeathCompatibilityListener;
+import org.stellarvan.stellarDuelBridge.listener.DurabilityListener;
+import org.stellarvan.stellarDuelBridge.listener.EnderPearlListener;
 import org.stellarvan.stellarDuelBridge.listener.FoodListener;
 import org.stellarvan.stellarDuelBridge.listener.GuiListener;
 import org.stellarvan.stellarDuelBridge.listener.MoveListener;
+import org.stellarvan.stellarDuelBridge.listener.PlayerJoinRestoreListener;
 import org.stellarvan.stellarDuelBridge.listener.QuitListener;
 import org.stellarvan.stellarDuelBridge.listener.RespawnListener;
 import org.stellarvan.stellarDuelBridge.listener.TeleportListener;
 import org.stellarvan.stellarDuelBridge.listener.WorldChangeListener;
+import org.stellarvan.stellarDuelBridge.placeholder.StellarDuelExpansion;
 import org.stellarvan.stellarDuelBridge.snapshot.SnapshotService;
-import org.stellarvan.stellarDuelBridge.storage.MySQLStorageProvider;
 import org.stellarvan.stellarDuelBridge.storage.SQLiteStorageProvider;
 import org.stellarvan.stellarDuelBridge.storage.StorageProvider;
 
@@ -35,6 +43,7 @@ public final class StellarDuelBridge extends JavaPlugin {
     private ArenaManager arenaManager;
     private SnapshotService snapshotService;
     private DuelSessionManager duelSessionManager;
+    private StellarDuelExpansion stellarDuelExpansion;
 
     @Override
     public void onEnable() {
@@ -60,9 +69,11 @@ public final class StellarDuelBridge extends JavaPlugin {
             snapshotService,
             storageProvider
         );
+        registerPlaceholderExpansion();
 
         registerCommands();
         registerListeners();
+        recoverPendingRestoresForOnlinePlayers();
         logStartupSummary();
     }
 
@@ -70,6 +81,13 @@ public final class StellarDuelBridge extends JavaPlugin {
     public void onDisable() {
         if (duelSessionManager != null) {
             duelSessionManager.shutdown();
+        }
+        if (stellarDuelExpansion != null) {
+            stellarDuelExpansion.unregister();
+            stellarDuelExpansion = null;
+        }
+        if (snapshotService != null) {
+            snapshotService.shutdown();
         }
         if (arenaManager != null) {
             arenaManager.releaseAll();
@@ -162,15 +180,49 @@ public final class StellarDuelBridge extends JavaPlugin {
 
     private void registerListeners() {
         Bukkit.getPluginManager().registerEvents(new CombatListener(duelSessionManager), this);
-        Bukkit.getPluginManager().registerEvents(new DeathListener(duelSessionManager, configManager), this);
+        Bukkit.getPluginManager().registerEvents(new DeathListener(this, duelSessionManager, configManager), this);
+        Bukkit.getPluginManager().registerEvents(new DuelDeathCompatibilityListener(this), this);
         Bukkit.getPluginManager().registerEvents(new QuitListener(duelSessionManager), this);
         Bukkit.getPluginManager().registerEvents(new TeleportListener(duelSessionManager), this);
+        Bukkit.getPluginManager().registerEvents(new EnderPearlListener(duelSessionManager, messageManager), this);
+        Bukkit.getPluginManager().registerEvents(new ChorusFruitListener(duelSessionManager, messageManager), this);
+        Bukkit.getPluginManager().registerEvents(new ConsumableListener(duelSessionManager, messageManager), this);
+        Bukkit.getPluginManager().registerEvents(new DurabilityListener(duelSessionManager), this);
         Bukkit.getPluginManager().registerEvents(new CommandBlockListener(duelSessionManager, configManager), this);
         Bukkit.getPluginManager().registerEvents(new MoveListener(duelSessionManager), this);
         Bukkit.getPluginManager().registerEvents(new WorldChangeListener(duelSessionManager), this);
         Bukkit.getPluginManager().registerEvents(new GuiListener(duelSessionManager), this);
         Bukkit.getPluginManager().registerEvents(new FoodListener(duelSessionManager), this);
         Bukkit.getPluginManager().registerEvents(new RespawnListener(snapshotService, duelSessionManager), this);
+        Bukkit.getPluginManager().registerEvents(new PlayerJoinRestoreListener(snapshotService, duelSessionManager), this);
+    }
+
+    private void registerPlaceholderExpansion() {
+        if (!hookManager.getPlaceholderAPIHook().isAvailable()) {
+            return;
+        }
+        if (!getConfig().getBoolean("integration.placeholderapi.enabled", true)) {
+            return;
+        }
+        this.stellarDuelExpansion = new StellarDuelExpansion(this);
+        if (stellarDuelExpansion.register()) {
+            getLogger().info("Registered PlaceholderAPI expansion: %stellarduel_*%");
+        } else {
+            getLogger().warning("Failed to register PlaceholderAPI expansion.");
+            stellarDuelExpansion = null;
+        }
+    }
+
+    private void recoverPendingRestoresForOnlinePlayers() {
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            for (UUID playerId : snapshotService.getPendingRestorePlayers()) {
+                Player player = Bukkit.getPlayer(playerId);
+                if (player == null || !player.isOnline()) {
+                    continue;
+                }
+                duelSessionManager.applyDeferredRestore(player);
+            }
+        }, 20L);
     }
 
     private void logStartupSummary() {

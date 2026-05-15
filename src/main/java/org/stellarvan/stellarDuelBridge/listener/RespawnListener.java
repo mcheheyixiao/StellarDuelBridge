@@ -4,7 +4,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.stellarvan.stellarDuelBridge.duel.DuelSessionManager;
 import org.stellarvan.stellarDuelBridge.snapshot.SnapshotService;
@@ -28,11 +27,4 @@ public final class RespawnListener implements Listener {
         Bukkit.getScheduler().runTaskLater(duelSessionManager.getPlugin(), () -> duelSessionManager.applyDeferredRestore(player), 1L);
     }
 
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        if (!snapshotService.hasDeferredRestore(event.getPlayer().getUniqueId())) {
-            return;
-        }
-        Bukkit.getScheduler().runTaskLater(duelSessionManager.getPlugin(), () -> duelSessionManager.applyDeferredRestore(event.getPlayer()), 1L);
-    }
 }
