@@ -1,6 +1,7 @@
 package org.stellarvan.stellarDuelBridge.hook;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.stellarvan.stellarDuelBridge.StellarDuelBridge;
 
 public final class HookManager {
@@ -47,10 +48,16 @@ public final class HookManager {
     }
 
     private void logHookStatus() {
-        plugin.getLogger().info("Hook detection: PvPManager=" + pvPManagerHook.isAvailable()
-            + ", Multiverse-Core=" + multiverseHook.isAvailable()
-            + ", WorldGuard=" + worldGuardHook.isAvailable()
-            + ", Vault=" + vaultHook.isAvailable()
-            + ", PlaceholderAPI=" + placeholderAPIHook.isAvailable());
+        plugin.getLogger().info("===== StellarDuelBridge Hook 状态 =====");
+        plugin.getLogger().info("Hook 状态: ");
+        plugin.getLogger().info(status(pvPManagerHook.isAvailable())+" PvPManager");
+        plugin.getLogger().info(status(multiverseHook.isAvailable())+" Multiverse-Core");
+        plugin.getLogger().info(status(worldGuardHook.isAvailable())+" WorldGuard");
+        plugin.getLogger().info(status(vaultHook.isAvailable())+" Vault");
+        plugin.getLogger().info("======================================");
+    }
+
+    private String status(boolean available) {
+        return available ? "✅ " : "❌ ";
     }
 }

@@ -75,6 +75,7 @@ public final class StellarDuelBridge extends JavaPlugin {
         registerListeners();
         recoverPendingRestoresForOnlinePlayers();
         logStartupSummary();
+        getLogger().info("StellarDuelBridge enabled.");
     }
 
     @Override
@@ -143,7 +144,7 @@ public final class StellarDuelBridge extends JavaPlugin {
                 getLogger().warning("MySQL is not implemented in V1. Falling back to SQLite.");
                 return new SQLiteStorageProvider(this, configManager);
             }
-            throw new IllegalStateException("MySQL storage is not implemented in V1 and fallback is disabled.");
+            throw new IllegalStateException("MySQL storage is not implemented in V1. and fallback is disabled.");
         }
         return new SQLiteStorageProvider(this, configManager);
     }
